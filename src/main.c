@@ -17,7 +17,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <time.h>
+#include <sched.h>
+#include <string.h>
 #include "refcount.h"
 
 #define ITERS 100000
@@ -30,21 +31,27 @@ void *incr(void *arg)
   int i;
   int *an_int;
   int lock_ret;
-  struct timespec req;
 
   an_int = (int *)arg;
-  printf("incr in ref count: %d\n", ref_count(an_int));
+  printf("\tincr in ref count: %d\n", ref_count(an_int));
 
   for (i = 0; i < ITERS; ++i) {
     if ((lock_ret = ref_pthread_mutex_lock(an_int))) {
-      fprintf(stderr, "incr could not lock: %d\n", lock_ret);
+      char error_message[BUFSIZ];
+      int strerror_error;
+
+      strerror_error = strerror_r(lock_ret, error_message, BUFSIZ);
+      if (strerror_error)
+        printf("incr could not lock (%d), could not get error message (%d)\n",
+               lock_ret, strerror_error);
+      else
+        fprintf(stderr, "incr could not lock (%d): %s\n", lock_ret,
+                error_message);
       exit(1);
     }
     (*an_int)++;
     ref_pthread_mutex_unlock(an_int);
-    req.tv_sec = 0L;
-    req.tv_nsec = (rand() % 100) * 1000L;
-    nanosleep(&req, (struct timespec *)NULL);
+    sched_yield();
   }
 
   /*
@@ -52,7 +59,7 @@ void *incr(void *arg)
    * to increment the retain count before starting the thread
    */
   ref_release(an_int);
-  printf("incr ref count after release: %d\n", ref_count(an_int));
+  printf("\tincr ref count after release: %d\n", ref_count(an_int));
   return 0;
 }
 
@@ -64,23 +71,29 @@ void *decr(void *arg)
   int i;
   int *an_int;
   int lock_ret;
-  struct timespec req;
 
   an_int = (int *)arg;
-  printf("decr in ref count: %d\n", ref_count(an_int));
+  printf("\tdecr in ref count: %d\n", ref_count(an_int));
   for (i = ITERS - 1; i >= 0; --i) {
     if((lock_ret = ref_pthread_mutex_lock(an_int))) {
-      fprintf(stderr, "decr could not lock: %d\n", lock_ret);
+      char error_message[BUFSIZ];
+      int strerror_error;
+
+      strerror_error = strerror_r(lock_ret, error_message, BUFSIZ);
+      if (strerror_error)
+        printf("decr could not lock (%d), could not get error message (%d)\n",
+               lock_ret, strerror_error);
+      else
+        fprintf(stderr, "decr could not lock (%d): %s\n", lock_ret,
+                error_message);
       exit(2);
     }
     (*an_int)--;
+    sched_yield();
     ref_pthread_mutex_unlock(an_int);
-    req.tv_sec = 0L;
-    req.tv_nsec = (rand() % 100) * 1000L;
-    nanosleep(&req, (struct timespec *)NULL);
   }
   ref_release(an_int);
-  printf("decr ref count after release: %d\n", ref_count(an_int));
+  printf("\tdecr ref count after release: %d\n", ref_count(an_int));
   return 0;
 }
 
@@ -90,24 +103,24 @@ int main(void)
   pthread_t incr_thr;
   pthread_t decr_thr;
 
-  printf("A simple reference counting example in c.\n");
-  printf("Spawn an increment and decrement thread on an int.\n");
-  printf("Each thread iterates %d times.\n", ITERS);
-  printf("If all goes well the start and end int will have the same value.\n");
+  printf("A simple reference counting example in C.\n"
+         "Spawn an increment and decrement thread for a shared integer.\n"
+         "Each thread iterates %d times.\n"
+         "If all goes well the start and end int will have the same value.\n",
+         ITERS);
 
   /* allocates the object, ref count is 1 */
   an_int = ref_alloc(sizeof(*an_int));
-  printf("alloc ref count: %d\n", ref_count(an_int));
-
   if (an_int == NULL) {
     fprintf(stderr, "Could not allocate int\n");
     exit(1);
   }
+  printf("alloc ref count: %d\n", ref_count(an_int));
 
   /* use the object normally, no need to lock as no other threads have access */
   *an_int = 100;
 
-  printf("int begin: %d\n", *an_int);
+  printf("start: %d\n", *an_int);
 
   /* create incrementing thread */
   if (ref_pthread_create(&incr_thr, NULL, &incr, an_int)) {
@@ -134,8 +147,8 @@ int main(void)
   }
 
   /* count should be the same as the original */
-  printf("int end: %d\n", *an_int);
-  printf("ref count before release: %d\n", ref_count(an_int));
+  printf("end: %d\n", *an_int);
+  printf("\tref count before release: %d\n", ref_count(an_int));
   ref_release(an_int);
 
   return 0;
