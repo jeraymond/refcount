@@ -59,13 +59,11 @@ void ref_release(void *ptr)
 {
   obj_t *obj;
   char *cptr;
-  pthread_mutex_t mutex;
   int dofree = 0;
 
   cptr = (char *)ptr;
   cptr -= sizeof(obj_t);
   obj = (obj_t *)cptr;
-  mutex = obj->mutex;
 
   pthread_mutex_lock(&obj->mutex);
   if (obj->ref-- == 0) {
