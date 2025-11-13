@@ -66,7 +66,7 @@ void ref_release(void *ptr)
   obj = (obj_t *)cptr;
 
   pthread_mutex_lock(&obj->mutex);
-  if (obj->ref-- == 0) {
+  if (--obj->ref == 0) {
     dofree = 1;
   }
   pthread_mutex_unlock(&obj->mutex);
