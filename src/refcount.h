@@ -18,13 +18,16 @@
 #define _REFCOUNT_H
 
 #include <pthread.h>
-#include <rpc/types.h>
+#include <stdalign.h>
+#include <stdatomic.h>
+#include <stddef.h>
 
 typedef struct {
-  void *data;
+  /* max alignment pads the header so the memory following it is aligned */
+  alignas(max_align_t) void *data;
 
   pthread_mutex_t mutex;
-  int ref;
+  atomic_int ref;
 } obj_t;
 
 /**
@@ -126,6 +129,6 @@ int ref_pthread_mutex_trylock(void *ptr);
  * @see pthread_create
  */
 int ref_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-		       void *(*start_routine)(void *), void *arg);
+                       void *(*start_routine)(void *), void *arg);
 
 #endif

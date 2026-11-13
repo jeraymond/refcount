@@ -1,2 +1,3 @@
 *.o
 refcount
+.DS_Store

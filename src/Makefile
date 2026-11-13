@@ -1,6 +1,6 @@
 PRGNAME = refcount
 OBJ = refcount.o main.o
-CFLAGS = -std=c99 -pedantic -Wall -W -g -O2 -pthread -ansi \
+CFLAGS = -std=c11 -pedantic -Wall -W -g -O2 -pthread \
 		-D _POSIX_C_SOURCE=200809L
 
 all: refcount

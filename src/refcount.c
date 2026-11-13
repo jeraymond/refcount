@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 
+#include "refcount.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "refcount.h"
 
-void *ref_alloc(size_t size)
-{
+void *ref_alloc(size_t size) {
   obj_t *obj;
   char *ptr;
   int result;
+
+  if (size > SIZE_MAX - sizeof(obj_t)) {
+    return NULL;
+  }
 
   obj = (obj_t *)calloc(sizeof(obj_t) + size, 1);
   if (obj == NULL) {
@@ -42,58 +46,42 @@ void *ref_alloc(size_t size)
   }
 }
 
-void ref_retain(void *ptr)
-{
+void ref_retain(void *ptr) {
   obj_t *obj;
   char *cptr;
 
   cptr = (char *)ptr;
   cptr -= sizeof(obj_t);
   obj = (obj_t *)cptr;
-  pthread_mutex_lock(&obj->mutex);
-  obj->ref++;
-  pthread_mutex_unlock(&obj->mutex);
+  atomic_fetch_add(&obj->ref, 1);
 }
 
-void ref_release(void *ptr)
-{
+void ref_release(void *ptr) {
   obj_t *obj;
   char *cptr;
-  int dofree = 0;
 
   cptr = (char *)ptr;
   cptr -= sizeof(obj_t);
   obj = (obj_t *)cptr;
 
-  pthread_mutex_lock(&obj->mutex);
-  if (--obj->ref == 0) {
-    dofree = 1;
-  }
-  pthread_mutex_unlock(&obj->mutex);
-  if (dofree) {
+  if (atomic_fetch_sub(&obj->ref, 1) == 1) {
     pthread_mutex_destroy(&obj->mutex);
     free(obj);
   }
 }
 
-int ref_count(void *ptr)
-{
+int ref_count(void *ptr) {
   obj_t *obj;
   char *cptr;
-  int value;
 
   cptr = (char *)ptr;
   cptr -= sizeof(obj_t);
   obj = (obj_t *)cptr;
 
-  pthread_mutex_lock(&obj->mutex);
-  value = obj->ref;
-  pthread_mutex_unlock(&obj->mutex);
-  return value;
+  return atomic_load(&obj->ref);
 }
 
-int ref_pthread_mutex_lock(void *ptr)
-{
+int ref_pthread_mutex_lock(void *ptr) {
   obj_t *obj;
   char *cptr;
 
@@ -103,8 +91,7 @@ int ref_pthread_mutex_lock(void *ptr)
   return pthread_mutex_lock(&obj->mutex);
 }
 
-int ref_pthread_mutex_unlock(void *ptr)
-{
+int ref_pthread_mutex_unlock(void *ptr) {
   obj_t *obj;
   char *cptr;
 
@@ -114,8 +101,7 @@ int ref_pthread_mutex_unlock(void *ptr)
   return pthread_mutex_unlock(&obj->mutex);
 }
 
-int ref_pthread_mutex_trylock(void *ptr)
-{
+int ref_pthread_mutex_trylock(void *ptr) {
   obj_t *obj;
   char *cptr;
 
@@ -126,8 +112,7 @@ int ref_pthread_mutex_trylock(void *ptr)
 }
 
 int ref_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                       void *(*start_routine)(void *), void *arg)
-{
+                       void *(*start_routine)(void *), void *arg) {
   int ret;
 
   ref_retain(arg);

@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
+#include "refcount.h"
 #include <pthread.h>
 #include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "refcount.h"
 
 #define ITERS 100000
 
 /**
  * This function increments the integer, locking the object when doing so
  */
-void *incr(void *arg)
-{
+void *incr(void *arg) {
   int i;
   int *an_int;
   int lock_ret;
@@ -58,16 +57,15 @@ void *incr(void *arg)
    * ref_pthread_create retained for this thread; the calling thread needs
    * to increment the retain count before starting the thread
    */
+  printf("\tincr ref count before release: %d\n", ref_count(an_int));
   ref_release(an_int);
-  printf("\tincr ref count after release: %d\n", ref_count(an_int));
   return 0;
 }
 
 /**
  * This function decrements the integer, locking the object when doing so
  */
-void *decr(void *arg)
-{
+void *decr(void *arg) {
   int i;
   int *an_int;
   int lock_ret;
@@ -75,7 +73,7 @@ void *decr(void *arg)
   an_int = (int *)arg;
   printf("\tdecr in ref count: %d\n", ref_count(an_int));
   for (i = ITERS - 1; i >= 0; --i) {
-    if((lock_ret = ref_pthread_mutex_lock(an_int))) {
+    if ((lock_ret = ref_pthread_mutex_lock(an_int))) {
       char error_message[BUFSIZ];
       int strerror_error;
 
@@ -92,13 +90,12 @@ void *decr(void *arg)
     sched_yield();
     ref_pthread_mutex_unlock(an_int);
   }
+  printf("\tdecr ref count before release: %d\n", ref_count(an_int));
   ref_release(an_int);
-  printf("\tdecr ref count after release: %d\n", ref_count(an_int));
   return 0;
 }
 
-int main(void)
-{
+int main(void) {
   int *an_int;
   pthread_t incr_thr;
   pthread_t decr_thr;
@@ -124,14 +121,12 @@ int main(void)
 
   /* create incrementing thread */
   if (ref_pthread_create(&incr_thr, NULL, &incr, an_int)) {
-    ref_release(an_int);
     fprintf(stderr, "Could not create thread\n");
     exit(1);
   }
 
   /* create decrementing thread */
   if (ref_pthread_create(&decr_thr, NULL, &decr, an_int)) {
-    ref_release(an_int);
     fprintf(stderr, "Could not create thread\n");
     exit(1);
   }
